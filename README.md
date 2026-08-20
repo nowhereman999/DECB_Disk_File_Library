@@ -153,4 +153,4 @@ The routines may change all 6809 registers. LOADM returns its EXEC address in
 D. The library never prints an error or halts the caller.
 
 Assembled callers and listings, including byte-reader and byte-writer examples,
-are under `Tests/Generic_Disk_Library`.
+are under `Example_Code_to_use_this_Library/Generic_Disk_Library`.
