@@ -17,6 +17,7 @@
 *   DiskLibWriteByte   B=byte to append. Returns C clear on success.
 *   DiskLibCloseWrite  Flush and publish the current output file.
 *   DiskLibInit        Install the CoCo 1/2 or CoCo 3 NMI hook.
+*   DiskLibMotorOff    Immediately turn off the motor and deselect drives.
 *   DiskLibShutdown    Restore the three bytes replaced by DiskLibInit.
 *
 * Filenames use NAME.EXT or NAME.EXT:drive. The extension defaults to BIN and
@@ -76,6 +77,7 @@ DiskLibLoadM:
         JSR     InitFile
         JSR     DiskLOADM
         LDD     DiskLoadExec
+        JSR     DiskLibMotorOff
         ANDCC   #$FE
         RTS
 
@@ -90,6 +92,7 @@ DiskLibSaveM:
         LBSR    DiskFormatFilenameX
         LBCS    DiskError
         JSR     DiskSAVEM
+        JSR     DiskLibMotorOff
         CLRB
         ANDCC   #$FE
         RTS
@@ -104,11 +107,13 @@ DiskLibFileExists:
         LDU     #DNAMBF
         JSR     OpenFileU
         BCS     DiskLibExistsAbsent
+        JSR     DiskLibMotorOff
         CLRB
         ANDCC   #$FE
         RTS
 DiskLibExistsAbsent:
         * OpenFileU already returns B=DiskErrorFileNotFound.
+        JSR     DiskLibMotorOff
         ORCC    #1
         RTS
 
@@ -144,6 +149,7 @@ DiskLibCloseRead:
         CMPA    #1
         LBNE    DiskFileNotOpenDirect
         CLR     DiskStreamMode
+        JSR     DiskLibMotorOff
         CLRB
         ANDCC   #$FE
         RTS
@@ -189,6 +195,7 @@ DiskLibCloseWrite:
         JSR     DiskFinishWriteBuffer
         JSR     DiskWriterCommit
         CLR     DiskStreamMode
+        JSR     DiskLibMotorOff
         CLRB
         ANDCC   #$FE
         RTS
@@ -248,15 +255,16 @@ DiskLibSaveNMI:
         STA     ,Y
         LDD     #DiskLibNMI
         STD     1,Y
-        ANDCC   #$AF
         COM     DiskNMIInstalled
 DiskLibInitDone:
+        * PULS restores the caller's original IRQ/FIRQ mask state.
         PULS    CC,D,X,Y,PC
 
 DiskLibShutdown:
         PSHS    CC,D,X,Y
         TST     DiskNMIInstalled
         BEQ     DiskLibShutdownDone
+        JSR     DiskLibMotorOff
         ORCC    #$50
         LDY     DiskNMIVector
         LDX     #DiskSavedNMI
@@ -265,9 +273,20 @@ DiskLibShutdown:
         LDD     ,X
         STD     1,Y
         CLR     DiskNMIInstalled
-        ANDCC   #$AF
 DiskLibShutdownDone:
+        * PULS restores the caller's original IRQ/FIRQ mask state.
         PULS    CC,D,X,Y,PC
+
+* Turn off the motor and all drive selects without changing caller registers
+* or condition codes. This is also safe to call explicitly after disk use.
+DiskLibMotorOff:
+        PSHS    CC,A
+        LDA     DRGRAM
+        ANDA    #$B0
+        STA     DRGRAM
+        STA     DSKREG
+        CLR     RDYTMR
+        PULS    CC,A,PC
 
 DiskLibNMI:
         LDA     NMIFLG
@@ -917,7 +936,9 @@ DiskIOError:
 
 ; Standalone WD17xx restore/read/write driver.
 DSKCON:
-        PSHS    U,Y,X,B,A
+        * Preserve the caller's complete condition code, including its IRQ and
+        * FIRQ masks.  Sector transfers mask both until the FDC NMI completes.
+        PSHS    U,Y,X,B,A,CC
         LDA     #5
         PSHS    A
 DiskCommandRetry:
@@ -965,7 +986,7 @@ DiskCommandResult:
 DiskCommandDone:
         LDA     #120
         STA     RDYTMR
-        PULS    A,B,X,Y,U,PC
+        PULS    CC,A,B,X,Y,U,PC
 
 DiskRestore:
         CLR     DiskTrackImage
@@ -1067,7 +1088,6 @@ DiskWaitReadDRQ:
         BNE     <
 DiskTransferTimeout:
         CLR     NMIFLG
-        ANDCC   #$AF
         JMP     DiskForceInterrupt
 DiskReadDataByte:
         LDB     FDCREG+3
@@ -1077,7 +1097,6 @@ DiskReadDataByte:
 
 ; DiskLibNMI replaces the stacked return PC with this completion routine.
 DiskSectorComplete:
-        ANDCC   #$AF
         LDA     FDCREG
         ANDA    #$7C
         STA     DCSTA
@@ -1095,6 +1114,7 @@ DiskDriveMasks:
 DiskError:
         CLR     DiskStreamMode
         LDS     DiskApiStack
+        JSR     DiskLibMotorOff
         ORCC    #1
         RTS
 

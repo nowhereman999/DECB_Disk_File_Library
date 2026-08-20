@@ -10,8 +10,9 @@ Start:
         LDD     #0                      * signed relocation offset
         JSR     DiskLibLoadM
         BCS     LoadFailed              * B = DiskError... value
+        * DiskLibLoadM has turned off the drive motor.
         STD     LoadedExec
-        JSR     DiskLibShutdown
+        JSR     DiskLibShutdown          * restore NMI; motor-off is also safe
         JMP     [LoadedExec]
 
 LoadFailed:

@@ -5,8 +5,8 @@ physical DECB floppy without Disk BASIC's `$0600-$0DFF` workspace. The module
 contains its own relocatable state, full-disk granule allocation list, 256-byte
 sector buffer, WD17xx driver, and CoCo 1/2/3 NMI handler.
 
-The current build occupies `$07F3` bytes of code and reserves `$018F` bytes of
-workspace, for a total address span of `$0982` bytes. `DiskLibInit` clears and
+The current build occupies `$081D` bytes of code and reserves `$018F` bytes of
+workspace, for a total address span of `$09AC` bytes. `DiskLibInit` clears and
 signs the workspace on first use, so it is safe when an assembler treats `RMB`
 as uninitialized storage and omits it from the load file.
 
@@ -92,9 +92,31 @@ Only one sequential stream may be open at a time. LOADM, SAVEM, and the file
 existence check also return error 16 while a stream is open because those calls
 share the sector buffer.
 
+## Disk motor control
+
+The library turns off the motor and deselects all drives automatically:
+
+- after LOADM and SAVEM;
+- after either result from `DiskLibFileExists`;
+- when `DiskLibCloseRead` or `DiskLibCloseWrite` succeeds;
+- when a disk operation returns through the common error handler; and
+- when `DiskLibShutdown` is called.
+
+The motor deliberately remains running while a sequential stream is open. It
+is not stopped after each `DiskLibReadByte` or `DiskLibWriteByte`, avoiding a
+spin-up delay for every sector or byte. A caller can also stop it explicitly:
+
+```asm
+        JSR     DiskLibMotorOff
+```
+
+`DiskLibMotorOff` preserves all registers and condition codes. It should be
+called only after the library has been initialized or used at least once.
+
 ## NMI ownership
 
-Every public operation calls `DiskLibInit` automatically. The first call saves
+Every operation which opens or searches for a file calls `DiskLibInit`
+automatically. The first call saves
 the existing three-byte NMI trampoline and installs `DiskLibNMI` at `$0109` on
 a CoCo 1/2 or `$FEFD` on a CoCo 3. Call `DiskLibShutdown` when disk operations
 are finished to restore those bytes. A CoCo 3 project must enable GIME vector

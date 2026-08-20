@@ -12,7 +12,8 @@ Start:
         LDY     #PayloadStart           * EXEC address in file postamble
         JSR     DiskLibSaveM
         BCS     SaveFailed              * B = DiskError... value
-        JSR     DiskLibShutdown
+        * DiskLibSaveM has turned off the drive motor.
+        JSR     DiskLibShutdown          * restore NMI; motor-off is also safe
 SaveComplete:
         BRA     SaveComplete            * save completed
 

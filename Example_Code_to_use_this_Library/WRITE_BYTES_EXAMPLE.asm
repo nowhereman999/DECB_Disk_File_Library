@@ -18,7 +18,8 @@ WriteLoop:
         BLO     WriteLoop
         JSR     DiskLibCloseWrite
         BCS     WriteFailed
-        JSR     DiskLibShutdown
+        * CloseWrite has flushed the file and turned off the drive motor.
+        JSR     DiskLibShutdown          * restore NMI; motor-off is also safe
 WriteComplete:
         BRA     WriteComplete
 

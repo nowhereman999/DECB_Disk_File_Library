@@ -20,7 +20,8 @@ ReadStopped:
         BNE     ReadFailed
         JSR     DiskLibCloseRead
         BCS     ReadFailed
-        JSR     DiskLibShutdown
+        * CloseRead has turned off the drive motor.
+        JSR     DiskLibShutdown          * restore NMI; motor-off is also safe
 ReadComplete:
         BRA     ReadComplete
 
